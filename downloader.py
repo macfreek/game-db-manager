@@ -38,7 +38,8 @@ class CachedDownloader:
         if cachefolder is None:
             cachefolder = Path(__file__).parent
         self.cachefolder = cachefolder.resolve()
-        logging.debug(f"Set cachefolder to {self.cachefolder}")
+        self.logger = logging.getLogger('cached-downloader')
+        self.logger.debug(f"Set cachefolder to {self.cachefolder}")
         self.cachefolder.mkdir(parents=True, exist_ok=True)
 
         self.session = requests.Session()
@@ -57,18 +58,18 @@ class CachedDownloader:
             if not sourcepath.exists():
                 raise FileNotFoundError("File not found: %s" % (sourcepath))
         except FileNotFoundError:
-            logging.warning("Can't make backup. File not found: %s" % sourcefile)
+            self.logger.warning("Can't make backup. File not found: %s" % sourcefile)
             raise
         separator = ' ' if ' ' in sourcepath.stem else '.'
         dest_filename = sourcefile.stem + separator + datetime.date.today().isoformat() \
                     + sourcefile.suffix
-        logging.debug("Backup '%s' to '%s'." % (sourcefile, dest_filename))
+        self.logger.debug("Backup '%s' to '%s'." % (sourcefile, dest_filename))
         
         destpath = self.cachefolder / dest_filename
         try:
             shutil.copyfile(str(sourcepath), str(destpath))
         except (OSError):
-            logging.warning("Can't make backup to %s" % (destpath))
+            self.logger.warning("Can't make backup to %s" % (destpath))
             raise
 
     def _url_to_short_filename(self, url: str, extension: str='.html') -> Path:
@@ -84,7 +85,7 @@ class CachedDownloader:
             try:
                 k, v = query.split('=')
                 k = k.lower()
-                if k.endswith('id') or k.endswith('ids') or k in ('params',):
+                if k.endswith('id') or k.endswith('ids') or k in ('params','volts'):
                     # replace sequence of non-word characters with _
                     v = re.sub(r'[^A-Za-z0-9]+', '_', v)
                     short_name += '_' + k + '_' + v
@@ -113,7 +114,7 @@ class CachedDownloader:
         use_cache = False
         if file_path.exists() and time.time() - file_path.stat().st_mtime < ttl * 86400:
             # file exists and is recent (or is not recent, but we enforce cache to trottle downloads)
-            logging.debug("Fetching %s" % (cache_name))
+            self.logger.debug("Fetching %s" % (cache_name))
             if binary_mode:
                 with file_path.open('rb') as f:
                     data = f.read()
@@ -122,10 +123,10 @@ class CachedDownloader:
                     data = f.read()
         else:
             try:
-                delay = max(uniform(self.mindelay, self.maxdelay), time.time() - self.prevtime)
+                delay = uniform(self.mindelay, self.maxdelay) + self.prevtime - time.time()
                 if delay > 0:
                     time.sleep(delay)
-                logging.debug("Fetching %s (after %.1fs delay)" % (url, delay))
+                self.logger.debug("Fetching %s (after %.1fs delay)" % (url, delay))
                 r = self.session.get(url, cookies=cookies)
                 self.prevtime = time.time()
                 if binary_mode:
@@ -134,14 +135,14 @@ class CachedDownloader:
                     data = r.text
                 finalurl = r.url
                 if finalurl != url:
-                    logging.info("%s redirects to %s." % (url, finalurl))
+                    self.logger.info("%s redirects to %s." % (url, finalurl))
                 r.raise_for_status()
                 _downloaded_data = True
             except requests.ConnectionError as exc:
-                logging.error("Can't connect to %s: %s" % (url, exc))
+                self.logger.error("Can't connect to %s: %s" % (url, exc))
                 raise ConnectionError("Failed to download data from %s" % url) from None
             except (HTTPError, requests.exceptions.HTTPError) as e:
-                logging.warning("HTTP error for %s: %s" % (url, e))
+                self.logger.warning("HTTP error for %s: %s" % (url, e))
                 # Regretfully, in case of HTTP Error 429: Too Many Requests,
                 # e.headers does not contain a "Retry-after" header on store.steampowered.com/api.
                 raise ConnectionError("Failed to download data from %s" % url) from None
@@ -150,21 +151,21 @@ class CachedDownloader:
             decoded_data = decode_func(data)
         except ValueError as e:
             if len(data) == 0:
-                logging.error("Donwloaded 0 bytes from %s. Invalid %s" % (url, decode_name))
+                self.logger.error("Donwloaded 0 bytes from %s. Invalid %s" % (url, decode_name))
             if finalurl == url:
-                logging.error("Can't decode %s from %s: %s" % (url, decode_name, e))
+                self.logger.error("Can't decode %s from %s: %s" % (url, decode_name, e))
                 raise ValueError("Failed to download data from %s" % url) from None
             elif 'login' in finalurl:
-                logging.error("%s redirects to non-%s login page %s. " \
+                self.logger.error("%s redirects to non-%s login page %s. " \
                               "Please verify login credentials." % (url, decode_name, finalurl))
                 raise PermissionError("Redirected to login page from %s" % url) from None
             else:
-                logging.error("%s redirects to non-%s page %s." % (url, decode_name, finalurl))
+                self.logger.error("%s redirects to non-%s page %s." % (url, decode_name, finalurl))
                 raise ConnectionError("Redirected to non-%s page from %s" % (decode_name, url)) \
                         from None
         if _downloaded_data:
             try:
-                logging.debug("Write to %s" % (file_path))
+                self.logger.debug("Write to %s" % (file_path))
                 if binary_mode:
                     with file_path.open('wb') as f:
                         f.write(data)
@@ -172,7 +173,7 @@ class CachedDownloader:
                     with file_path.open('w', encoding=encoding) as f:
                         f.write(data)
             except OSError as e:
-                logging.warning("%s" % (e))
+                self.logger.warning("%s" % (e))
                 # report and proceed (ignore missing cache)
         return decoded_data
     
