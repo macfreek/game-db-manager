@@ -252,16 +252,17 @@ def verify_steamids(steam: Steam, database: FileMaker):
     Also verify that all Steam games I own are listed in the database. 
     Ignores all DLC (since I don't list all DLC in my database.)"""
     steamapps = steam.get_userapps()
-    steamapps_public = steam.get_userapps_public()
-    
-    public_not_in_private = set(steamapps_public.keys()) - set(steamapps.keys())
-    private_not_in_public = set(steamapps.keys()) - set(steamapps_public.keys())
-    for steamid in sorted(public_not_in_private):
-        logging.info("Steam ID %d [%s] listed in Steam public list, but not in Steam API." % \
-                    (steamid, steamapps_public[steamid]['name']))
-    for steamid in sorted(private_not_in_public):
-        logging.info("Steam ID %d [%s] listed in Steam API, but not in Steam public list." % \
-                    (steamid, steamapps[steamid]['name']))
+
+    # Public API is disabled; you now have to log in for that, and it no longer returns XML.
+    # steamapps_public = steam.get_userapps_public()
+    # public_not_in_private = set(steamapps_public.keys()) - set(steamapps.keys())
+    # private_not_in_public = set(steamapps.keys()) - set(steamapps_public.keys())
+    # for steamid in sorted(public_not_in_private):
+    #     logging.info("Steam ID %d [%s] listed in Steam public list, but not in Steam API." % \
+    #                 (steamid, steamapps_public[steamid]['name']))
+    # for steamid in sorted(private_not_in_public):
+    #     logging.info("Steam ID %d [%s] listed in Steam API, but not in Steam public list." % \
+    #                 (steamid, steamapps[steamid]['name']))
     
     logging.info("Query database for Purchases")
     fields = ('Name', 'AppType', 'SteamAppId', 'Distribution', 'Gift', 'PriceType', 'StoreURL')
@@ -305,7 +306,7 @@ def verify_steamids(steam: Steam, database: FileMaker):
                     (game['AppType'], game["Name"], steamid, steamtype))
         
         if steamdistrib and steamtype != 'removed' and not isgift and steamid not in steamapps \
-                and steamid not in steamapps_public and steamtype != 'dlc':
+                and steamtype != 'dlc':
             try:
                 steamappname = steam.get_appdata(steamid)['name']
             except KeyError:
@@ -1153,7 +1154,7 @@ if __name__ == '__main__':
     cachedownload = CachedDownloader(
             cachefolder=cachefolder, 
             cache_enforce_chance=config.cache_enforce_chance,
-            delay = 1.6
+            delay = 1.6  # Steam rate-limits at 200 requests per 5 mins (300 secs).
     )
 
     database = FileMaker(database=config.filemaker_database, 
