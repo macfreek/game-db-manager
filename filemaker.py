@@ -6,6 +6,7 @@ Interface to Filemaker database which stores registration codes of games and app
 Requirements:
 port install py-pyodbc  (also installs unixODBC)
 install Filemaker ODBC, can be downloaded from http://www.filemaker.com/support/downloads/
+or available in the 'Extras' folder of FileMaker Server.
 """
 from os.path import exists
 import logging
@@ -47,13 +48,31 @@ class FileMaker:
     def connect(self) -> None:
         """Connect to the filemaker database.
         Provide useful error messages in case connection fails."""
+        # Port is specified, but seems to be ignored.
         dsn = "DRIVER=%s;Server=%s;Port=%s;Database=%s;UID=%s;PWD=%s" % \
                 (self.fm_odbc_path, self.server_ip, self.server_port, 
                 self.database, self.username, self.password)
         logging.debug("Connect to FileMaker ODBC with DSN %s" % (dsn))
         try:
-            # Port seems to be ignored.
-            self._connection = pyodbc.connect(dsn)
+            # Try to open the connection without encoding.
+            # and if it fails, with an encoding.
+            encoding = None
+            try:
+                self._connection = pyodbc.connect(dsn)
+            except pyodbc.Error as e:
+                if e.args[0] in ('0000', 'IM002'):
+                    # likely pyodbc with unixODBC. This uses UTF-16LE as default encoding.
+                    encoding = 'UTF-16LE'
+                    # This will likely still fail, but we can try.
+                elif e.args[0] == 'IM0':
+                    # likely pyodbc with iODBC. This uses UTF-32LE as default encoding.
+                    encoding = 'UTF-32LE'
+                else:
+                    # Something else is going on.
+                    raise
+            if self._connection is None and encoding:
+                # Try again, now with explicit encoding.
+                self._connection = pyodbc.connect(dsn, encoding=encoding)
         except pyodbc.Error as e:
             if not exists(self.fm_odbc_path):
                 logging.error("File %s not found. Install the FileMaker ODBC Driver. " \
@@ -66,6 +85,8 @@ class FileMaker:
             elif "Unable to open file" in e.args[1]:
                 logging.error("Can connect to FileMaker, but database '%s' not found." % \
                         (self.database))
+            else:
+                logging.info(f"dsn = {dsn}")
             raise
         # Encoding must be set on Python 3.5 or 3.6, otherwise it will raise an exception:
         #     FQL0001/(1:1): There is an error in the syntax of the query. (8310) (SQLExecDirectW)'
@@ -81,6 +102,7 @@ class FileMaker:
             logging.debug("Close database connection")
             self._connection.close()
             self._connection = None
+            logging.debug("Closed database connection")
     
     def __del__(self):
         self.close()
