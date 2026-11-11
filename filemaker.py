@@ -24,8 +24,7 @@ except ImportError:
 try:
     import pyodbc
 except ImportError:
-    raise ImportError("Package pyodbc is not available. Install using e.g. "
-            "`port install py-pyodbc` or `port install unixODBC; pip install pyodbc --no-binary :all:`.") from None
+    pyodbc = None
 
 # for some quircks on FileMaker SQL, see e.g.:
 # https://coddswallop.wordpress.com/2015/07/08/accessing-filemaker-pro-server-11-via-odbc-sql/
@@ -57,6 +56,9 @@ class FileMaker:
             # Try to open the connection without encoding.
             # and if it fails, with an encoding.
             encoding = None
+            if pyodbc is None:
+                raise ImportError("Package pyodbc is not available. Install using e.g. "
+                        "`port install py-pyodbc` or `port install unixODBC; pip install pyodbc --no-binary :all:`.") from None
             try:
                 self._connection = pyodbc.connect(dsn)
             except pyodbc.Error as e:
