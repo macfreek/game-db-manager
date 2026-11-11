@@ -21,7 +21,7 @@ class Gog:
         """Given a Gog slug (short key to identify a game), return the data. 
         May raise a IOError if no data can be downloaded."""
         return self.downloader.get_cached_json(self.GAME_URL.format(slug=slug),
-                'gog_product_review_%s.json' % (slug))
+                'gog product reviews/gog_product_review_%s.json' % (slug))
 
 # See 
 # https://gogapidocs.readthedocs.io/

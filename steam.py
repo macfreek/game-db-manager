@@ -52,7 +52,7 @@ class Steam:
         May raise a KeyError if no data is found.
         May raise a IOError if no data can be downloaded."""
         j = self.downloader.get_cached_json(self.GAME_INFO_URL.format(appid=appid),
-                'steam_appdetails_%s.json' % (appid), ttl=20, may_extend_cache=True)
+                'steam appdetails/steam_appdetails_%s.json' % (appid), ttl=20, may_extend_cache=True)
         try:
             j = j[str(appid)]
             success = j['success']

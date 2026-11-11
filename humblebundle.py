@@ -57,7 +57,7 @@ class HumbleBundle:
         try:
             orderdetails = self.downloader.get_cached_json(
                     self.ORDER_INFO_URL.format(order_id=orderid), 
-                    'humble_order_%s.json' % (orderid), ttl=400)
+                    'humble bundle orders/humble_order_%s.json' % (orderid), ttl=400)
         except PermissionError:
             logging.error("Permission denied for %s. Log in manually with your webbrowser, " \
                 "and store the _simpleauth_sess cookie in config.ini, in " \
