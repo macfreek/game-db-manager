@@ -8,6 +8,7 @@ Available under MIT license.
 (Re-use is permitted, attribution is required; code comes as-is without guarantees)
 """
 
+from abc import ABC, abstractmethod
 from urllib.parse import urlparse
 from urllib.error import HTTPError
 from pathlib import Path
@@ -31,7 +32,42 @@ except ImportError:
 from http.client import HTTPResponse # noqa (only used for type hints)
 URL = str
 
-class CachedDownloader:
+class AbstractDownloader(ABC):
+    """Interface for objects that return data from a URL or a cache file.
+
+    Implemented by CachedDownloader, and by browserlogin.BrowserLogin, which
+    wraps a CachedDownloader and adds an interactive login."""
+
+    @abstractmethod
+    def get_cached_url(self, url: URL, cache_name: str=None, ttl: float=1.2,
+                may_extend_cache: bool=False, cookies: dict={}, encoding='utf-8',
+                decode_func=lambda x: x, decode_name='text', binary_mode=False,
+                **kwargs):
+        """Return a Python object from URL or cache file."""
+
+    @abstractmethod
+    def get_cached_html(self, url: URL, cache_name: str=None, ttl: float=1.2,
+                may_extend_cache: bool=False, cookies: dict={}):
+        """Return a BeautifulSoup (parsed html) object from URL or cache
+        file."""
+
+    @abstractmethod
+    def get_cached_json(self, url: URL, cache_name: str=None, ttl: float=1.2,
+                may_extend_cache: bool=False, cookies: dict={}):
+        """Return a Python object from a JSON URL or cache file."""
+
+    @abstractmethod
+    def get_cached_xml(self, url: URL, cache_name: str=None, ttl: float=1.2,
+                may_extend_cache: bool=False, cookies: dict={}):
+        """Return an ElementTree object from an XML URL or cache file."""
+
+    @abstractmethod
+    def get_cached_binary(self, url: URL, cache_name: str=None, ttl: float=1.2,
+                may_extend_cache: bool=False, cookies: dict={}):
+        """Return bytes from URL or cache file."""
+
+
+class CachedDownloader(AbstractDownloader):
     def __init__(self, cachefolder: Path = None, cache_enforce_chance=0.0, delay: float=0.2, includehostname=True) -> None:
         # TODO: if not cachefolder: Create one in /var/tmp
         # Note: cache_enforce_chance is deprecated and ignored

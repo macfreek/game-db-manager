@@ -13,17 +13,18 @@ except ImportError:
     Any = ''  # type: ignore
 
 # local module (only used here for type hints)
-from downloader import CachedDownloader
+from downloader import AbstractDownloader
 
 class HumbleBundle:
     ORDER_LIST_URL = "https://www.humblebundle.com/api/v1/user/order"
     ORDER_INFO_URL = "https://www.humblebundle.com/api/v1/order/{order_id}" \
                      "?wallet_data=true&all_tpkds=true"
-    
-    def __init__(self, sessioncookie, downloader: CachedDownloader) -> None:
-        # self.cookies = {'_simpleauth_sess': sessioncookie}
+
+    def __init__(self, downloader: AbstractDownloader) -> None:
+        """The downloader is typically a browserlogin.HumbleBundleLogin: it
+        sends the session cookies, and on a PermissionError opens a browser to
+        let the user log in, then retries once."""
         self.downloader = downloader
-        self.downloader.add_cookie('_simpleauth_sess', sessioncookie, 'humblebundle.com', '/')
 
     # def get_game_data(self, slug):
     #     """Given a Gog slug (short key to identify a game), return the data.
@@ -33,16 +34,12 @@ class HumbleBundle:
 
     def get_order_list(self) -> List[str]:
         """Return a list of owned games of the current user.
-        The current user is determined by the sessioncookie.
-        May raise an PermissionError if the sessioncookie is invalid."""
-        try:
-            orderlist = self.downloader.get_cached_json(
-                    self.ORDER_LIST_URL, 'humble_orders_list.json')
-        except PermissionError:
-            logging.error("Permission denied for %s. Log in manually with your webbrowser, " \
-                "and store the _simpleauth_sess cookie in config.ini, in " \
-                "humblebundle_sessioncookie." % (self.ORDER_LIST_URL))
-            raise
+        The current user is determined by the session.
+        If the user is not logged in, the downloader will present a browser
+        to the user to log in. May raise a PermissionError if the interactive
+        login failed to provide correct credentials."""
+        orderlist = self.downloader.get_cached_json(
+                self.ORDER_LIST_URL, 'humble_orders_list.json')
         return [v['gamekey'] for v in orderlist]
     
     def get_order_info(self, orderid: str):
@@ -52,17 +49,13 @@ class HumbleBundle:
         Games with only a Steam Key are NOT included in the order details!
         This can be detected with the difference between 'total' and len('subproducts')
         
-        The current user is determined by the sessioncookie.
-        May raise an PermissionError if the sessioncookie is invalid."""
-        try:
-            orderdetails = self.downloader.get_cached_json(
-                    self.ORDER_INFO_URL.format(order_id=orderid), 
-                    'humble bundle orders/humble_order_%s.json' % (orderid), ttl=400)
-        except PermissionError:
-            logging.error("Permission denied for %s. Log in manually with your webbrowser, " \
-                "and store the _simpleauth_sess cookie in config.ini, in " \
-                "humblebundle_sessioncookie.")
-            raise
+        The current user is determined by the session.
+        If the user is not logged in, the downloader will present a browser
+        to the user to log in. May raise a PermissionError if the interactive
+        login failed to provide correct credentials."""
+        orderdetails = self.downloader.get_cached_json(
+                self.ORDER_INFO_URL.format(order_id=orderid),
+                'humble bundle orders/humble_order_%s.json' % (orderid), ttl=400)
         return orderdetails
 
     # def get_order_summary(self, orderid: str):

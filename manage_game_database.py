@@ -3,8 +3,10 @@
 """Game Database Manager. Store game purchases in local FileMaker database.
 
 Requirements:
-port install py-pyodbc  (also installs unixODBC)
-install Filemaker ODBC, can be downloaded from http://www.filemaker.com/support/downloads/
+* playwright  (optional)
+* browser_cookie3  (optional)
+* port install py-pyodbc  (also installs unixODBC)
+* install Filemaker ODBC, can be downloaded from http://www.filemaker.com/support/downloads/
 """
 import sys
 import re
@@ -27,6 +29,7 @@ from filemaker import FileMaker
 from downloader import CachedDownloader
 from steam import Steam
 from humblebundle import HumbleBundle
+from browserlogin import HumbleBundleLogin, SteamLogin
 
 # Type hints
 try:
@@ -333,7 +336,7 @@ def humble_game_platforms(game) -> List[str]:
         return [distribution['platform'] for distribution in game['downloads']]
     elif game.get('platforms'):
         # TODO: what is the format of game['platforms']?
-        assert isintance(game['platforms'], list)
+        assert isinstance(game['platforms'], list)
         return game['platforms']
     else:
         logging.warning("No platform found for game {}".format(game['human_name']))
@@ -1080,11 +1083,11 @@ def parseargs(argv):
             help='Your Steam username.')
 
     group = parser.add_argument_group(title='HumbleBundle options')
-    group.add_argument('--humblebundle_sessioncookie', metavar='COOKIE_VALUE', required=True,
-            help='The content of the _simpleauth_sess cookie. ' \
-                 'The value can be found in your web browser by manually loging ' \
-                 'in to humblebundle.com.')
-    parser.add_argument('--humbleorder', action='store', 
+    group.add_argument('--humblebundle_cookie', metavar='VALUE',
+            help='The Humble Bundle login cookie. Copy the value for the cookie ' \
+                 'ory_session_stoiccohens510ht9xek from your web browser after ' \
+                 'logging in to humblebundle.com.')
+    group.add_argument('--humbleorder', action='store', 
             dest='humbleorder', help="Limit action to this order ID.")
 
     group = parser.add_argument_group(title='Gog options')
@@ -1093,6 +1096,19 @@ def parseargs(argv):
 
     group = parser.add_argument_group(title='WikiData options')
     
+    group = parser.add_argument_group(title='Browser options')
+    group.add_argument('--login_method', default='config',
+            choices=['config', 'store', 'cdp', 'browser'],
+            help='Method to get the login cookie(s) from your browser. ' \
+                 '(default: %(default)s). config: use ' \
+                 'value in the configuration file; store: read the cookie store of ' \
+                 'your web browser; cdp: connect to a Chrome started with remote ' \
+                 'debugging; browser: let Playwright start a browser for the login')
+    group.add_argument('--browser', metavar='BROWSER', default='chrome',
+            help='The browser for the login method. For browser: webkit, chromium, ' \
+                 'firefox, chrome or msedge. For store: e.g. opera, chrome, firefox ' \
+                 'or safari.')
+
     options = parser.parse_args(argv)
     
     if not options.actions:
@@ -1163,11 +1179,15 @@ if __name__ == '__main__':
     databasefile = Path(config.filemaker_database_file)
     database.set_precommit_hook1(lambda: cachedownload.backup(databasefile))
     
-    steam = Steam(config.steam_api_key, config.steam_user_id, 
+    # steamsession = SteamLogin(cachedownload, config.browser)
+    steam = Steam(config.steam_api_key, config.steam_user_id,
             config.steam_user_name, cachedownload)
-    
-    humblebundle = HumbleBundle(config.humblebundle_sessioncookie, cachedownload)
-    
+
+    humblebundlesession = HumbleBundleLogin(
+        cachedownload, login_method=config.login_method,
+        browser=config.browser, cookie=config.humblebundle_cookie)
+    humblebundle = HumbleBundle(humblebundlesession)
+
     if 'find-missing-steamids' in config.actions:
         find_missing_steamids(steam, database)
     if 'find-all-steamids' in config.actions:
